@@ -61,6 +61,8 @@
     
     <p id="loadingMessage">Analyzing... Please wait.</p>
     <div id="output"></div>
+    <h3>Upload History</h3>
+<ul id="historyList"></ul>
 
   <script>
  document.addEventListener("DOMContentLoaded", () => {
@@ -82,11 +84,18 @@
 
   // Handle dropped files
   dropZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    dropZone.classList.remove("dragover");
-    fileInput.files = e.dataTransfer.files; // Assign files to input
-    uploadFiles();
-  });
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+
+  const droppedFiles = [...e.dataTransfer.files]; // Convert FileList to array
+
+  if (droppedFiles.length === 0) {
+    alert("No files detected.");
+    return;
+  }
+
+  uploadFiles(droppedFiles); // Pass files properly
+});
 });
 
 async function uploadFiles(files = null) {
@@ -105,6 +114,8 @@ async function uploadFiles(files = null) {
   loadingMessage.style.display = "block";
   outputDiv.innerHTML = "";
 
+  let history = JSON.parse(localStorage.getItem("statementHistory")) || [];
+
   for (let file of selectedFiles) {
     const formData = new FormData();
     formData.append("merchantStatement", file);
@@ -122,46 +133,23 @@ async function uploadFiles(files = null) {
 
       const data = await response.json();
       outputDiv.innerHTML += formatTable(data.analysis) + "<br>";
+
+      // ✅ Save to history
+      history.push({
+        filename: file.name,
+        data: data.analysis,
+        timestamp: new Date().toISOString()
+      });
+
+      localStorage.setItem("statementHistory", JSON.stringify(history));
     } catch (error) {
       outputDiv.innerHTML += `<p style="color: red;">Error processing ${file.name}: ${error.message}</p>`;
     }
   }
 
   loadingMessage.style.display = "none";
+  displayHistory();
 }
-      const fileInput = document.getElementById('fileInput');
-      const loadingMessage = document.getElementById('loadingMessage');
-      const outputDiv = document.getElementById('output');
-
-      if (!fileInput.files.length) {
-        alert('Please select a file first.');
-        return;
-      }
-
-      loadingMessage.style.display = 'block';
-      outputDiv.innerHTML = '';
-
-      const formData = new FormData();
-      formData.append('merchantStatement', fileInput.files[0]);
-
-      try {
-        const response = await fetch('https://merchant-analysis.onrender.com/upload', {
-          method: 'POST',
-          body: formData
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.error || 'Upload failed');
-        }
-
-        const data = await response.json();
-        outputDiv.innerHTML = formatTable(data.analysis);
-      } catch (error) {
-        outputDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
-      } finally {
-        loadingMessage.style.display = 'none';
-      }
 
     function formatTable(markdown) {
   if (!markdown.includes('|')) return `<pre>${markdown}</pre>`;
@@ -210,15 +198,78 @@ async function uploadFiles(files = null) {
 
   return html + "</table>";
 }
-dropZone.addEventListener("drop", (e) => {
-  e.preventDefault();
-  dropZone.classList.remove("dragover");
 
-  console.log("Dropped files:", e.dataTransfer.files); // ✅ DEBUG: See what files are dropped
+function displayHistory() {
+  const historyList = document.getElementById("historyList");
+  const history = JSON.parse(localStorage.getItem("statementHistory")) || [];
 
-  fileInput.files = e.dataTransfer.files; // Assign files to input
-  uploadFiles();
+  historyList.innerHTML = "";
+
+  history.forEach((entry, index) => {
+    const li = document.createElement("li");
+    li.innerHTML = `<b>${entry.filename}</b> - ${new Date(entry.timestamp).toLocaleString()} 
+      <button onclick="downloadCSV(${index})">📥 Download CSV</button>
+      <button onclick="shareResult(${index})">🔗 Share</button>`;
+    historyList.appendChild(li);
+  });
+}
+
+// Call on page load
+document.addEventListener("DOMContentLoaded", () => {
+  displayHistory(); // Load history on page load
+
+  // ✅ Handle shared data from URL
+  const urlParams = new URLSearchParams(window.location.search);
+  const sharedData = urlParams.get("data");
+
+  if (sharedData) {
+    document.getElementById("output").innerHTML = formatTable(decodeURIComponent(sharedData));
+  }
 });
+
+function downloadCSV(index) {
+  const history = JSON.parse(localStorage.getItem("statementHistory")) || [];
+  const entry = history[index];
+
+  if (!entry) return alert("No data found for this statement.");
+
+  // Convert Markdown table to CSV
+  const markdownTable = entry.data;
+  const rows = markdownTable.split("\n").filter(row => row.includes("|") && !row.includes("---"));
+
+  let csvContent = "data:text/csv;charset=utf-8,";
+
+  // Extract headers and format correctly
+  const headerRow = rows.shift().split("|").map(cell => cell.trim()).slice(1, -1).join(",");
+  csvContent += headerRow + "\n";
+
+  rows.forEach((row) => {
+    const cols = row.split("|").map(cell => cell.trim());
+    csvContent += cols.slice(1, -1).join(",") + "\n";
+  });
+
+  const encodedUri = encodeURI(csvContent);
+  const link = document.createElement("a");
+  link.setAttribute("href", encodedUri);
+  link.setAttribute("download", `${entry.filename.replace(".pdf", "")}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+function shareResult(index) {
+  const history = JSON.parse(localStorage.getItem("statementHistory")) || [];
+  const entry = history[index];
+
+  if (!entry) return alert("No data found for this statement.");
+
+  const encodedData = encodeURIComponent(entry.data);
+  const shareableLink = `${window.location.origin}${window.location.pathname}?data=${encodedData}`;
+
+  navigator.clipboard.writeText(shareableLink).then(() => {
+    alert("🔗 Link copied! You can now share this result.");
+  }).catch(err => console.error("Failed to copy:", err));
+}
   </script>
 </body>
 </html>
