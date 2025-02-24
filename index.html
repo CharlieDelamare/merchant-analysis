@@ -1,0 +1,134 @@
+<!-- FILE: index.html -->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Merchant Invoice Analysis</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+    }
+    #loadingMessage {
+      display: none;
+      font-weight: bold;
+      color: blue;
+    }
+    #output {
+      width: 80%;
+      margin: 20px auto;
+      text-align: left;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 1rem;
+    }
+    th,
+    td {
+      border: 1px solid #ccc;
+      padding: 8px;
+      text-align: center;
+    }
+    th {
+      background-color: #f2f2f2;
+    }
+  </style>
+</head>
+<body>
+  <h2>Upload Merchant Invoice PDF</h2>
+  <input type="file" id="fileInput" />
+  <button onclick="uploadFile()">Upload</button>
+
+  <p id="loadingMessage">Analyzing... Please wait.</p>
+  <div id="output"></div>
+
+  <script>
+    async function uploadFile() {
+      const fileInput = document.getElementById('fileInput');
+      const loadingMessage = document.getElementById('loadingMessage');
+      const outputDiv = document.getElementById('output');
+
+      if (!fileInput.files.length) {
+        alert('Please select a file first.');
+        return;
+      }
+
+      loadingMessage.style.display = 'block';
+      outputDiv.innerHTML = '';
+
+      const formData = new FormData();
+      formData.append('merchantStatement', fileInput.files[0]);
+
+      try {
+        const response = await fetch('http://localhost:3000/upload', {
+          method: 'POST',
+          body: formData
+        });
+
+        if (!response.ok) {
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Upload failed');
+        }
+
+        const data = await response.json();
+        outputDiv.innerHTML = formatTable(data.analysis);
+      } catch (error) {
+        outputDiv.innerHTML = `<p style="color: red;">Error: ${error.message}</p>`;
+      } finally {
+        loadingMessage.style.display = 'none';
+      }
+    }
+
+    function formatTable(markdown) {
+  if (!markdown.includes('|')) return `<pre>${markdown}</pre>`;
+
+  const rows = markdown.split("\n").filter(row => row.includes("|") && !row.includes("---"));
+  let html = "<table>";
+
+  // Extract header row and remove it from the data rows
+  let headerRow = rows.shift(); // This assumes the first row is the header
+  let dataRows = [];
+
+  // Define sorting order
+  const order = ["Visa", "MasterCard", "Amex", "Other", "Total"];
+
+  rows.forEach((row) => {
+    let cols = row.split("|").map(cell => cell.trim());
+    if (cols.length > 2) {
+      let rowData = cols.slice(1, -1); // Remove first and last empty columns
+      dataRows.push(rowData);
+    }
+  });
+
+  // Sort the data rows based on the predefined order
+  dataRows.sort((a, b) => {
+    let indexA = order.indexOf(a[0]) !== -1 ? order.indexOf(a[0]) : order.length;
+    let indexB = order.indexOf(b[0]) !== -1 ? order.indexOf(b[0]) : order.length;
+    return indexA - indexB;
+  });
+
+  // Add the header row at the top
+  let headerCols = headerRow.split("|").map(cell => `<th>${cell.trim()}</th>`).slice(1, -1); // Trim and format as <th>
+  html += `<tr>${headerCols.join("")}</tr>`;
+
+  // Rebuild table rows in the correct order, applying bold formatting for the totals row
+  dataRows.forEach(row => {
+    let isTotalRow = row[0].toLowerCase().includes("total");
+
+    html += `<tr>${row
+      .map(cell => {
+        // Remove any Markdown bold (`**text**`) and replace it with `<b>text</b>`
+        let cleanCell = cell.replace(/\*\*(.*?)\*\*/g, "<b>$1</b>");
+        return isTotalRow ? `<td><b>${cleanCell}</b></td>` : `<td>${cleanCell}</td>`;
+      })
+      .join("")}</tr>`;
+  });
+
+  return html + "</table>";
+}
+  </script>
+</body>
+</html>
