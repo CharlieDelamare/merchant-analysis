@@ -1,0 +1,20 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log
+package-lock.json
+
+# Environment variables (DO NOT SHARE API KEYS!)
+.env
+
+# Logs & cache
+logs/
+*.log
+yarn-error.log
+.DS_Store
+
+# MacOS system files
+._*
+Thumbs.db
+
+# Editor config files
+.vscode/
