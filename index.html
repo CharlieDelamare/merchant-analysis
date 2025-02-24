@@ -89,12 +89,15 @@
   });
 });
 
-async function uploadFiles() {
+async function uploadFiles(files = null) {
   const fileInput = document.getElementById("fileInput");
   const loadingMessage = document.getElementById("loadingMessage");
   const outputDiv = document.getElementById("output");
 
-  if (!fileInput.files.length) {
+  // Get files from input if no files were passed (from drag & drop)
+  const selectedFiles = files || [...fileInput.files];
+
+  if (selectedFiles.length === 0) {
     alert("Please select at least one file.");
     return;
   }
@@ -102,7 +105,7 @@ async function uploadFiles() {
   loadingMessage.style.display = "block";
   outputDiv.innerHTML = "";
 
-  for (let file of fileInput.files) {
+  for (let file of selectedFiles) {
     const formData = new FormData();
     formData.append("merchantStatement", file);
 
@@ -207,6 +210,15 @@ async function uploadFiles() {
 
   return html + "</table>";
 }
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+
+  console.log("Dropped files:", e.dataTransfer.files); // ✅ DEBUG: See what files are dropped
+
+  fileInput.files = e.dataTransfer.files; // Assign files to input
+  uploadFiles();
+});
   </script>
 </body>
 </html>
